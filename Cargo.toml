@@ -6,3 +6,7 @@ edition = "2021"
 [dependencies]
 alphavantage = { path = "../alphavantage" }
 tokio = { version = "1", features = ["full"] }
+eframe = "0.29.1"
+serde = "1.0.217"
+serde_json = "1.0.134"
+thiserror = "2.0.9"
