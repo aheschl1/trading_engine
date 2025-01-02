@@ -1,0 +1,8 @@
+[package]
+name = "trading_simulator"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+alphavantage = { path = "../alphavantage" }
+tokio = { version = "1", features = ["full"] }
