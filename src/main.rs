@@ -5,7 +5,10 @@ use eframe::{App, CreationContext};
 use std::env;
 use tokio;
 
+mod utils;
 mod bank;
+
+const APP_NAME: &str = "trading_simulator";
 
 struct TradingSimulator{
     alphavantage_client: Client,
@@ -28,6 +31,16 @@ impl App for TradingSimulator{
             ui.label("Welcome to the trading simulator!");
         });
     }
+
+    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
+        // Save the bank state
+        if let Some(bank) = &self.bank{
+            _storage.set_string("bank", serde_json::to_string(bank).unwrap());
+        }
+        _storage.set_string("alphavantage_token", "hello".to_string());
+    }
+
+    
 }
 
 #[tokio::main]
@@ -39,11 +52,14 @@ async fn main() -> Result<(), tokio::io::Error> {
     let alphavantage_client = Client::new(&alphavantage_token);
     let app = TradingSimulator::new(alphavantage_client);
 
-    eframe::run_native(
-        "Trading Simulator", 
-        Default::default(),
-        Box::new(|_| Ok(Box::new(app))),
+    let options = eframe::NativeOptions::default();
+    // ~/.config/trading_simulator should be the default path for the persistence file
+    // options.persistence_path = Some(utils::expand_tilde(format!("~/.config/{APP_NAME}").as_str()));
 
+    eframe::run_native(
+        APP_NAME, 
+        options,
+        Box::new(|_| Ok(Box::new(app))),
     ).unwrap();
     Ok(())
 }
