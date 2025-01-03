@@ -1,3 +1,5 @@
+use serde::{Deserialize, Serialize};
+
 
 /// A holding represents a stock that is owned by an account
 /// It has a price, quantity, symbol, and purchase date
@@ -13,6 +15,7 @@ pub trait Holding{
 /// A stock holding represents a stock that is owned by an account
 /// It has a price, quantity, symbol, and purchase date
 /// A stock holding represents a stock that is owned by an account, purchased at a certain price and quantity
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StockHolding{
     price: f64,
     quantity: f64,

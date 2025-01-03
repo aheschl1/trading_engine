@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use account::{Account, Checking};
+use account::{Account, AccountType, Checking, InvestmentAccount};
 use serde::{Deserialize, Serialize};
 mod stock;
 
@@ -10,41 +10,43 @@ mod stock;
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Bank{
     checking_accounts: HashMap<u32, account::Account>,
-    // investment_accounts: HashMap<u32, account::Account>,
+    investment_accounts: HashMap<u32, account::InvestmentAccount>,
 }
 
 impl Bank{
     /// Creates a new bank with the given accounts
     pub fn new(accounts: HashMap<u32, Account>) -> Self{
         Bank{
-            checking_accounts: accounts
+            checking_accounts: accounts,
+            investment_accounts: HashMap::<u32, InvestmentAccount>::new()
         }
     }
 
     /// Creates a new bank with no accounts
     pub fn empty() -> Self{
         Bank{
-            checking_accounts: HashMap::new()
+            checking_accounts: HashMap::new(),
+            investment_accounts: HashMap::<u32, InvestmentAccount>::new()
         }
-    }
-
-    /// Adds an account to the bank
-    pub fn add_account(&mut self, account: Account) -> Result<(), error::BankError>{
-        let id = account.get_id();
-        if self.checking_accounts.contains_key(&id){
-            return Err(error::BankError::AccountAlreadyExists);
-        }
-        self.checking_accounts.insert(id, account);
-        Ok(())
     }
 
     /// Opens a new account, with an optional nickname
-    pub fn open_account(&mut self, nickname: Option<String>) -> Result<u32, error::BankError>{
+    pub fn open_account(&mut self, nickname: Option<String>, account_type: AccountType) -> Result<u32, error::BankError>{
         // find the highest id
-        let id = self.checking_accounts.keys().max().unwrap_or(&0) + 1;
-        let account = Account::new(id, 0.0, nickname);
-        self.checking_accounts.insert(id, account);
-        Ok(id)
+        match account_type{
+            AccountType::Checking => {
+                let id = self.checking_accounts.keys().max().unwrap_or(&0) + 1;
+                let account = Account::new(id, 0.0, nickname);
+                self.checking_accounts.insert(id, account);
+                Ok(id)
+            },
+            AccountType::Investment => {
+                let id = self.investment_accounts.keys().max().unwrap_or(&0) + 1;
+                let account = InvestmentAccount::new(id, 0.0, nickname);
+                self.investment_accounts.insert(id, account);
+                Ok(id)
+            },
+        }
     }
 
     /// Closes an account
@@ -89,12 +91,28 @@ impl std::string::ToString for Bank{
 }
 
 pub(crate) mod account{
+    use std::str::FromStr;
+
     use eframe::egui::ahash::{HashMap, HashMapExt};
     use serde::{de::value::Error, Deserialize, Serialize};
     use chrono;
 
     use super::{error, stock::{Holding, StockHolding}};
 
+    pub(crate) enum AccountType{
+        Checking,
+        Investment,
+    }
+
+    impl PartialEq for AccountType{
+        fn eq(&self, other: &Self) -> bool{
+            match (self, other){
+                (AccountType::Checking, AccountType::Checking) => true,
+                (AccountType::Investment, AccountType::Investment) => true,
+                _ => false,
+            }
+        }
+    }
     
     #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct Account{
@@ -112,6 +130,7 @@ pub(crate) mod account{
         fn get_nickname(&self) -> Option<String>;
         fn deposit(&mut self, amount: f64) -> f64;
         fn withdraw(&mut self, amount: f64) -> Result<f64, error::BankError>;
+        fn get_account_type(&self) -> AccountType;
         fn get_created_at(&self) -> chrono::DateTime<chrono::Utc>;
     }
 
@@ -144,6 +163,10 @@ pub(crate) mod account{
         fn get_created_at(&self) -> chrono::DateTime<chrono::Utc>{
             self.created_at
         }
+
+        fn get_account_type(&self) -> AccountType{
+            AccountType::Checking
+        }
     }
 
     impl Account{
@@ -163,6 +186,15 @@ pub(crate) mod account{
                 created_at: chrono::Utc::now(),
             }
         }
+
+        pub(crate) fn from_checking<T: Checking>(account: T) -> Self{
+            Account{
+                id: account.get_id(),
+                balance: account.get_balance(),
+                nickname: account.get_nickname(),
+                created_at: account.get_created_at(),
+            }
+        }
     }
 
     // from json string - use serde
@@ -177,12 +209,22 @@ pub(crate) mod account{
 
     /// An investment account is a checking account that can also be invested in stocks, bonds, etc.
     /// Holds stocks, bonds, etc.
+    #[derive(Debug, Clone, Deserialize, Serialize)]
     pub struct InvestmentAccount{
         id: u32,
         balance: f64,
         nickname: Option<String>,
         created_at: chrono::DateTime<chrono::Utc>,
         investments: HashMap<String, Vec<StockHolding>>
+    }
+
+    impl FromStr for InvestmentAccount{
+        type Err = serde_json::Error;
+
+        /// Parses a JSON string into an InvestmentAccount
+        fn from_str(s: &str) -> Result<InvestmentAccount, Self::Err>{
+            serde_json::from_str(s)
+        }
     }
 
     /// An investment account can also hold liquid funds, and is thus a checking account
@@ -215,6 +257,10 @@ pub(crate) mod account{
 
         fn get_created_at(&self) -> chrono::DateTime<chrono::Utc>{
             self.created_at
+        }
+
+        fn get_account_type(&self) -> AccountType{
+            AccountType::Investment
         }
     }
 
@@ -299,6 +345,16 @@ pub(crate) mod account{
             Ok(())
         }
 
+        pub fn from_checking<T: Checking>(account: T) -> Self{
+            InvestmentAccount{
+                id: account.get_id(),
+                balance: account.get_balance(),
+                nickname: account.get_nickname(),
+                created_at: account.get_created_at(),
+                investments: HashMap::<String, Vec<StockHolding>>::new()
+            }
+        }
+
     }
 
 }
@@ -332,7 +388,7 @@ mod tests{
     #[test]
     fn test_bank(){
         let mut bank = Bank::empty();
-        let id = bank.open_account(None).unwrap();
+        let id = bank.open_account(None, AccountType::Checking).unwrap();
         let account = bank.checking_accounts.get(&id).unwrap();
         assert_eq!(account.get_id(), id);
         assert_eq!(account.get_balance(), 0.0);
@@ -341,7 +397,7 @@ mod tests{
 
     #[test]
     fn test_bank_from_str(){
-        let json = r#"{"checking_accounts":{}}"#;
+        let json = r#"{"checking_accounts":{}, "investment_accounts":{}}"#;
         let bank = Bank::from_str(json).unwrap();
         assert_eq!(bank.checking_accounts.len(), 0);
     }
@@ -349,7 +405,7 @@ mod tests{
     #[test]
     fn test_bank_save(){
         let mut bank = Bank::empty();
-        let id = bank.open_account(Some("Nickname".to_string())).unwrap();
+        let id = bank.open_account(Some("Nickname".to_string()), AccountType::Checking).unwrap();
         let account = bank.checking_accounts.get(&id).unwrap();
         assert_eq!(account.get_id(), id);
         assert_eq!(account.get_balance(), 0.0);
@@ -371,18 +427,6 @@ mod tests{
     }
 
     #[test]
-    fn test_bank_add_account(){
-        let mut bank = Bank::empty();
-        let now = chrono::Utc::now();
-        let account = Account::new(1, 0.0, None);
-        assert_eq!(account.get_created_at().timestamp(), now.timestamp());
-        bank.add_account(account.clone()).unwrap();
-        assert_eq!(bank.checking_accounts.len(), 1);
-        assert_eq!(bank.checking_accounts.get(&1).unwrap().get_id(), 1);
-        assert_eq!(bank.checking_accounts.get(&1).unwrap().get_created_at(), account.get_created_at());
-    }
-
-    #[test]
     fn test_deposit(){
         let mut account = account::Account::new(1, 0.0, None);
         assert_eq!(account.deposit(10.0), 10.0);
@@ -400,11 +444,11 @@ mod tests{
     #[test]
     fn test_close_account(){
         let mut bank = Bank::empty();
-        let id = bank.open_account(None).unwrap();
+        let id = bank.open_account(None, AccountType::Checking).unwrap();
         assert!(bank.close_account(id).is_ok());
         assert!(bank.close_account(id).is_err());
 
-        let id = bank.open_account(None).unwrap();
+        let id = bank.open_account(None, AccountType::Checking).unwrap();
         let account = bank.checking_accounts.get_mut(&id).unwrap();
         account.deposit(10.0);
         assert!(bank.close_account(id).is_err());
@@ -441,5 +485,28 @@ mod tests{
         account.sell_investment("AAPL".to_string(), 101.0, 1.0).unwrap();
         assert_eq!(account.get_balance(), 101.0);
         assert_eq!(account.get_investments().len(), 0);
+    }
+
+    #[test]
+    fn test_oversell(){
+        let mut account = account::InvestmentAccount::new(1, 100.0, None);
+        account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
+        assert!(account.sell_investment("AAPL".to_string(), 101.0, 2.0).is_err());
+    }
+
+    #[test]
+    fn test_insufficient_funds(){
+        let mut account = account::InvestmentAccount::new(1, 100.0, None);
+        assert!(account.purchase_investment("AAPL".to_string(), 100.0, 2.0).is_err());
+    }
+
+    #[test]
+    fn test_open_investment_account(){
+        let mut bank = Bank::empty();
+        let id = bank.open_account(None, AccountType::Investment).unwrap();
+        let account = bank.investment_accounts.get(&id).unwrap();
+        assert_eq!(account.get_id(), id);
+        assert_eq!(account.get_balance(), 0.0);
+        assert_eq!(account.get_nickname(), None);
     }
 }
