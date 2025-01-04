@@ -6,21 +6,21 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Holding{
     asset: Asset,
-    pub total_cost: f64,
+    pub average_cost_per_unit: f64,
     pub quantity: f64,
 }
 
 impl Holding{
     pub fn new(total_cost: f64, quantity: f64, symbol: String) -> Self{
         Holding{
-            total_cost: total_cost,
+            average_cost_per_unit: total_cost,
             quantity: quantity,
             asset: Asset::new(symbol),
         }
     }
 
     fn get_price(&self) -> f64{
-        self.total_cost
+        self.average_cost_per_unit
     }
 
     fn get_quantity(&self) -> f64{

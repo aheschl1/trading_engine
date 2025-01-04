@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc, cell::RefCell};
 use accounts::{CheckingAccount, AccountType, Account, InvestmentAccount};
 use serde::{Deserialize, Serialize};
 mod stock;
@@ -63,13 +63,6 @@ impl Bank{
         Ok(())
     }
 
-    /// Transfers funds from one account to another
-    pub fn transfer_funds<F: Account, T: Account>(&mut self, mut from: F, mut to: T, amount: f64) -> Result<(), error::BankError>{
-        from.withdraw(amount)?;
-        to.deposit(amount);
-        Ok(())
-    }
-
     pub async fn save(&self, path: &str) -> Result<(), std::io::Error>{
         let json = serde_json::to_string(self)?;
         tokio::fs::write(path, json).await
@@ -123,7 +116,7 @@ mod tests{
     use stock::Holding;
 
     use super::*;
-    use std::str::FromStr;
+    use std::{rc::Rc, str::FromStr};
 
     #[test]
     fn test_bank(){
@@ -140,6 +133,7 @@ mod tests{
         let json = r#"{"checking_accounts":{}, "investment_accounts":{}}"#;
         let bank = Bank::from_str(json).unwrap();
         assert_eq!(bank.checking_accounts.len(), 0);
+        assert_eq!(bank.investment_accounts.len(), 0);
     }
 
     #[test]
@@ -167,21 +161,6 @@ mod tests{
     }
 
     #[test]
-    fn test_deposit(){
-        let mut account = accounts::CheckingAccount::new(1, 0.0, None);
-        assert_eq!(account.deposit(10.0), 10.0);
-        assert_eq!(account.deposit(5.0), 15.0);
-    }
-
-    #[test]
-    fn test_withdraw(){
-        let mut account = accounts::CheckingAccount::new(1, 10.0, None);
-        assert_eq!(account.withdraw(5.0).unwrap(), 5.0);
-        assert_eq!(account.withdraw(5.0).unwrap(), 0.0);
-        assert!(account.withdraw(1.0).is_err());
-    }
-
-    #[test]
     fn test_close_account(){
         let mut bank = Bank::empty();
         let id = bank.open_account(None, AccountType::Checking).unwrap();
@@ -194,59 +173,4 @@ mod tests{
         assert!(bank.close_account(id).is_err());
     }
 
-    #[test]
-    fn test_investment_account(){
-        let mut account = accounts::InvestmentAccount::new(1, 0.0, None);
-        assert_eq!(account.deposit(10.0), 10.0);
-        assert_eq!(account.deposit(5.0), 15.0);
-        assert_eq!(account.withdraw(5.0).unwrap(), 10.0);
-        assert_eq!(account.withdraw(5.0).unwrap(), 5.0);
-        assert!(account.withdraw(6.0).is_err());
-    }
-
-    #[test]
-    fn test_investment_account_purchase(){
-        let mut account = accounts::InvestmentAccount::new(1, 100.0, None);
-        account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
-        assert_eq!(account.get_balance(), 0.0);
-        assert_eq!(account.get_investments().len(), 1);
-        let holdings = account.get_investments().get("AAPL").unwrap();
-        assert_eq!(holdings.len(), 1);
-        let holding = holdings.get(0).unwrap();
-        assert_eq!(holding.get_price(), 100.0);
-        assert_eq!(holding.get_quantity(), 1.0);
-        assert_eq!(holding.get_symbol(), "AAPL");
-    }
-
-    #[test]
-    fn test_investment_account_sell(){
-        let mut account = accounts::InvestmentAccount::new(1, 100.0, None);
-        account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
-        account.sell_investment("AAPL".to_string(), 101.0, 1.0).unwrap();
-        assert_eq!(account.get_balance(), 101.0);
-        assert_eq!(account.get_investments().len(), 0);
-    }
-
-    #[test]
-    fn test_oversell(){
-        let mut account = accounts::InvestmentAccount::new(1, 100.0, None);
-        account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
-        assert!(account.sell_investment("AAPL".to_string(), 101.0, 2.0).is_err());
-    }
-
-    #[test]
-    fn test_insufficient_funds(){
-        let mut account = accounts::InvestmentAccount::new(1, 100.0, None);
-        assert!(account.purchase_investment("AAPL".to_string(), 100.0, 2.0).is_err());
-    }
-
-    #[test]
-    fn test_open_investment_account(){
-        let mut bank = Bank::empty();
-        let id = bank.open_account(None, AccountType::Investment).unwrap();
-        let account = bank.investment_accounts.get(&id).unwrap();
-        assert_eq!(account.get_id(), id);
-        assert_eq!(account.get_balance(), 0.0);
-        assert_eq!(account.get_nickname(), None);
-    }
 }

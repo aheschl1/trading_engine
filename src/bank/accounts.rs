@@ -6,6 +6,8 @@ use chrono;
 
 use super::{error, stock::{self, Holding}, transactions::{self, Transaction}};
 
+/// The type of account
+#[derive(Debug, Clone, Deserialize, Serialize)]
 pub(crate) enum AccountType{
     Checking,
     Investment,
@@ -21,17 +23,8 @@ impl PartialEq for AccountType{
     }
 }
 
-#[derive(Debug, Clone, Deserialize, Serialize)]
-pub struct CheckingAccount{
-    id: u32,
-    balance: f64,
-    nickname: Option<String>,
-    created_at: chrono::DateTime<chrono::Utc>,
-    transactions: Vec<Transaction>
-}
-
-/// A trait for checking accounts
-/// A checking account is a simple account that can be deposited to and withdrawn from
+/// A trait for accounts
+/// An account is a simple account that can be deposited to and withdrawn from
 pub trait Account {
     fn get_id(&self) -> u32;
     fn get_balance(&self) -> f64;
@@ -40,6 +33,15 @@ pub trait Account {
     fn withdraw(&mut self, amount: f64) -> Result<f64, error::BankError>;
     fn get_account_type(&self) -> AccountType;
     fn get_created_at(&self) -> chrono::DateTime<chrono::Utc>;
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct CheckingAccount{
+    id: u32,
+    balance: f64,
+    nickname: Option<String>,
+    created_at: chrono::DateTime<chrono::Utc>,
+    transactions: Vec<Transaction>
 }
 
 impl Account for CheckingAccount{
@@ -231,10 +233,11 @@ impl InvestmentAccount{
         }
         self.balance -= total_cost;
         if let Some(holding) = self.assets.get_mut(symbol.as_str()){
+            // Update the average cost per unit
+            holding.average_cost_per_unit = (holding.average_cost_per_unit * holding.quantity + total_cost) / (holding.quantity + quantity);
             holding.quantity += quantity;
-            holding.total_cost += total_cost;
         }else{
-            let holding = Holding::new(total_cost, quantity, symbol.clone());
+            let holding = Holding::new(total_cost/quantity, quantity, symbol.clone());
             self.assets.insert(symbol.clone(), holding);
         }
         // Update the transactions
@@ -273,7 +276,10 @@ impl InvestmentAccount{
         let total_cost = price * quantity;
         self.balance += total_cost;
         holding.quantity -= quantity;
-        holding.total_cost -= total_cost; // TODO: check if this is correct logic
+        if holding.quantity == 0.0{
+            // Remove the holding if the quantity is 0
+            self.assets.remove(symbol.as_str());
+        }
         // Update the transactions
         let transaction = Transaction::new(
             transactions::TransactionType::Sale(stock::Asset::new(symbol.clone()), quantity),
@@ -294,6 +300,103 @@ impl InvestmentAccount{
             assets: HashMap::new(),
             transactions: Vec::<Transaction>::new(),
         }
+    }
+
+}
+
+#[cfg(test)]
+mod test{
+
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn test_checking_account(){
+        let account = CheckingAccount::new(1, 0.0, None);
+        assert_eq!(account.get_id(), 1);
+        assert_eq!(account.get_balance(), 0.0);
+        assert_eq!(account.get_nickname(), None);
+        assert_eq!(account.get_account_type(), AccountType::Checking);
+    }
+
+    #[test]
+    fn test_investment_account(){
+        let account = InvestmentAccount::new(1, 0.0, None);
+        assert_eq!(account.get_id(), 1);
+        assert_eq!(account.get_balance(), 0.0);
+        assert_eq!(account.get_nickname(), None);
+        assert_eq!(account.get_account_type(), AccountType::Investment);
+    }
+
+    #[test]
+    fn test_deposit(){
+        let mut account = CheckingAccount::new(1, 0.0, None);
+        assert_eq!(account.deposit(100.0), 100.0);
+    }
+
+    #[test]
+    fn test_withdraw(){
+        let mut account = CheckingAccount::new(1, 100.0, None);
+        assert_eq!(account.withdraw(50.0).unwrap(), 50.0);
+    }
+
+    #[test]
+    fn test_withdraw_insufficient_funds(){
+        let mut account = CheckingAccount::new(1, 0.0, None);
+        assert!(account.withdraw(50.0).is_err());
+    }
+
+    #[test]
+    fn test_purchase_investment(){
+        let mut account = InvestmentAccount::new(1, 100.0, None);
+        account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
+        assert_eq!(account.get_investments().len(), 1);
+        assert_eq!(account.get_investments().get("AAPL").unwrap().quantity, 1.0);
+        assert_eq!(account.get_investments().get("AAPL").unwrap().average_cost_per_unit, 100.0);
+
+        account.deposit(100.0);
+        account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
+        assert_eq!(account.get_investments().len(), 1);
+        assert_eq!(account.get_investments().get("AAPL").unwrap().quantity, 2.0);
+        assert_eq!(account.get_investments().get("AAPL").unwrap().average_cost_per_unit, 100.0);
+
+        account.deposit(100.0);
+        account.purchase_investment("AAPL".to_string(), 10.0, 1.).unwrap();
+        assert_eq!(account.get_investments().len(), 1);
+        assert_eq!(account.get_investments().get("AAPL").unwrap().quantity, 3.0);
+        assert_eq!(account.get_investments().get("AAPL").unwrap().average_cost_per_unit, 70.0);
+    }
+
+    #[test]
+    fn test_purchase_investment_insufficient_funds(){
+        let mut account = InvestmentAccount::new(1, 0.0, None);
+        assert!(account.purchase_investment("AAPL".to_string(), 100.0, 1.0).is_err());
+    }
+
+    #[test]
+    fn test_sell_investment(){
+        let mut account = InvestmentAccount::new(1, 100.0, None);
+        account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
+        account.sell_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
+        assert_eq!(account.get_investments().len(), 0);
+    }
+
+    #[test]
+    fn test_sell_investment_insufficient_quantity(){
+        let mut account = InvestmentAccount::new(1, 100.0, None);
+        account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
+        assert!(account.sell_investment("AAPL".to_string(), 100.0, 2.0).is_err());
+    }
+
+    #[test]
+    fn test_sell_investment_mean_remains(){
+        let mut account = InvestmentAccount::new(1, 100.0, None);
+        account.purchase_investment("AAPL".to_string(), 50.0, 2.0).unwrap();
+        assert_eq!(account.get_investments().get("AAPL").unwrap().average_cost_per_unit, 50.0);
+        account.sell_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
+        assert_eq!(account.get_investments().get("AAPL").unwrap().quantity, 1.0);
+        assert_eq!(account.get_investments().get("AAPL").unwrap().average_cost_per_unit, 50.0);
+        assert_eq!(account.get_balance(), 100.0);
     }
 
 }
