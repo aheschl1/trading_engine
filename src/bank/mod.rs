@@ -161,6 +161,67 @@ mod tests{
     }
 
     #[test]
+    fn test_complex_bank_save(){
+        let mut bank = Bank::empty();
+        let id = bank.open_account(Some("Nickname".to_string()), AccountType::Checking).unwrap();
+        let account = bank.checking_accounts.get_mut(&id).unwrap();
+        account.deposit(10.0);
+        assert_eq!(account.get_balance(), 10.0);
+        // 2nd checking
+        let id2 = bank.open_account(Some("Nickname2".to_string()), AccountType::Checking).unwrap();
+        let account = bank.checking_accounts.get_mut(&id2).unwrap();
+        account.deposit(20.0);
+        assert_eq!(account.get_balance(), 20.0);
+        // open investment
+        let id3 = bank.open_account(Some("Investment".to_string()), AccountType::Investment).unwrap();
+        let account = bank.investment_accounts.get_mut(&id3).unwrap();
+        account.deposit(40.0);
+        assert_eq!(account.get_balance(), 40.0);
+        // purchase stock
+        account.purchase_investment("AAPL".to_string(), 10., 2.).unwrap();
+        assert_eq!(account.get_balance(), 20.0);
+        assert_eq!(account.get_investments().len(), 1);
+        // purchase second stock
+        account.purchase_investment("GOOGL".to_string(), 20., 1.).unwrap();
+        assert_eq!(account.get_balance(), 0.0);
+        assert_eq!(account.get_investments().len(), 2);
+
+
+        let path = "tests/test_complex_bank_save.json";
+        let _ = tokio::runtime::Runtime::new().unwrap().block_on(async {
+            bank.save(path).await
+        }).unwrap();
+
+        let json = std::fs::read_to_string(path).unwrap();
+        let bank2 = Bank::from_str(&json).unwrap();
+        
+        // check checking accounts
+        assert_eq!(bank2.checking_accounts.len(), 2);
+        let account2 = bank2.checking_accounts.get(&id).unwrap();
+        assert_eq!(account2.get_id(), id);
+        assert_eq!(account2.get_balance(), 10.0);
+        assert_eq!(account2.get_nickname(), Some("Nickname".to_string()));
+        let account2 = bank2.checking_accounts.get(&id2).unwrap();
+        assert_eq!(account2.get_id(), id2);
+        assert_eq!(account2.get_balance(), 20.0);
+        assert_eq!(account2.get_nickname(), Some("Nickname2".to_string()));
+        // check investment accounts
+        assert_eq!(bank2.investment_accounts.len(), 1);
+        let account2 = bank2.investment_accounts.get(&id3).unwrap();
+        assert_eq!(account2.get_id(), id3);
+        assert_eq!(account2.get_balance(), 0.);
+        assert_eq!(account2.get_nickname(), Some("Investment".to_string()));
+        assert_eq!(account2.get_investments().len(), 2);
+        let holding = account2.get_investments().get("AAPL").unwrap();
+        assert_eq!(holding.quantity, 2.);
+        assert_eq!(holding.average_cost_per_unit, 10.);
+        let holding = account2.get_investments().get("GOOGL").unwrap();
+        assert_eq!(holding.quantity, 1.);
+        assert_eq!(holding.average_cost_per_unit, 20.);
+
+    }
+
+    #[test]
     fn test_close_account(){
         let mut bank = Bank::empty();
         let id = bank.open_account(None, AccountType::Checking).unwrap();

@@ -7,6 +7,7 @@ use tokio;
 
 mod utils;
 mod bank;
+mod brokerage;
 
 const APP_NAME: &str = "trading_simulator";
 

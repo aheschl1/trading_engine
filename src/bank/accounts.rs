@@ -308,7 +308,6 @@ impl InvestmentAccount{
 mod test{
 
     use super::*;
-    use std::str::FromStr;
 
     #[test]
     fn test_checking_account(){
