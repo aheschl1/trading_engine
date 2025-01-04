@@ -1,7 +1,9 @@
 use std::collections::HashMap;
-use account::{Account, AccountType, Checking, InvestmentAccount};
+use accounts::{CheckingAccount, AccountType, Account, InvestmentAccount};
 use serde::{Deserialize, Serialize};
 mod stock;
+mod transactions;
+mod accounts;
 
 /// A bank that holds accounts
 /// It does nothing as of now, but hold accounts
@@ -9,13 +11,13 @@ mod stock;
 /// TODO: Add interest rates, fees, etc.
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Bank{
-    checking_accounts: HashMap<u32, account::Account>,
-    investment_accounts: HashMap<u32, account::InvestmentAccount>,
+    checking_accounts: HashMap<u32, accounts::CheckingAccount>,
+    investment_accounts: HashMap<u32, accounts::InvestmentAccount>,
 }
 
 impl Bank{
     /// Creates a new bank with the given accounts
-    pub fn new(accounts: HashMap<u32, Account>) -> Self{
+    pub fn new(accounts: HashMap<u32, CheckingAccount>) -> Self{
         Bank{
             checking_accounts: accounts,
             investment_accounts: HashMap::<u32, InvestmentAccount>::new()
@@ -36,7 +38,7 @@ impl Bank{
         match account_type{
             AccountType::Checking => {
                 let id = self.checking_accounts.keys().max().unwrap_or(&0) + 1;
-                let account = Account::new(id, 0.0, nickname);
+                let account = CheckingAccount::new(id, 0.0, nickname);
                 self.checking_accounts.insert(id, account);
                 Ok(id)
             },
@@ -61,14 +63,21 @@ impl Bank{
         Ok(())
     }
 
+    /// Transfers funds from one account to another
+    pub fn transfer_funds<F: Account, T: Account>(&mut self, mut from: F, mut to: T, amount: f64) -> Result<(), error::BankError>{
+        from.withdraw(amount)?;
+        to.deposit(amount);
+        Ok(())
+    }
+
     pub async fn save(&self, path: &str) -> Result<(), std::io::Error>{
         let json = serde_json::to_string(self)?;
         tokio::fs::write(path, json).await
     }
 }
 
-impl From<HashMap<u32, Account>> for Bank{
-    fn from(accounts: HashMap<u32, Account>) -> Self{
+impl From<HashMap<u32, CheckingAccount>> for Bank{
+    fn from(accounts: HashMap<u32, CheckingAccount>) -> Self{
         Bank::new(accounts)
     }
 }
@@ -88,275 +97,6 @@ impl std::string::ToString for Bank{
     fn to_string(&self) -> String{
         serde_json::to_string(self).unwrap()
     }
-}
-
-pub(crate) mod account{
-    use std::str::FromStr;
-
-    use eframe::egui::ahash::{HashMap, HashMapExt};
-    use serde::{de::value::Error, Deserialize, Serialize};
-    use chrono;
-
-    use super::{error, stock::{Holding, StockHolding}};
-
-    pub(crate) enum AccountType{
-        Checking,
-        Investment,
-    }
-
-    impl PartialEq for AccountType{
-        fn eq(&self, other: &Self) -> bool{
-            match (self, other){
-                (AccountType::Checking, AccountType::Checking) => true,
-                (AccountType::Investment, AccountType::Investment) => true,
-                _ => false,
-            }
-        }
-    }
-    
-    #[derive(Debug, Clone, Deserialize, Serialize)]
-    pub struct Account{
-        id: u32,
-        balance: f64,
-        nickname: Option<String>,
-        created_at: chrono::DateTime<chrono::Utc>,
-    }
-
-    /// A trait for checking accounts
-    /// A checking account is a simple account that can be deposited to and withdrawn from
-    pub trait Checking {
-        fn get_id(&self) -> u32;
-        fn get_balance(&self) -> f64;
-        fn get_nickname(&self) -> Option<String>;
-        fn deposit(&mut self, amount: f64) -> f64;
-        fn withdraw(&mut self, amount: f64) -> Result<f64, error::BankError>;
-        fn get_account_type(&self) -> AccountType;
-        fn get_created_at(&self) -> chrono::DateTime<chrono::Utc>;
-    }
-
-    impl Checking for Account{
-        fn get_id(&self) -> u32{
-            self.id
-        }
-
-        fn get_balance(&self) -> f64{
-            self.balance
-        }
-
-        fn get_nickname(&self) -> Option<String>{
-            self.nickname.clone()
-        }
-
-        fn deposit(&mut self, amount: f64) -> f64{
-            self.balance += amount;
-            self.balance
-        }
-
-        fn withdraw(&mut self, amount: f64) -> Result<f64, error::BankError>{
-            if self.balance < amount{
-                return Err(error::BankError::InsufficientFunds);
-            }
-            self.balance -= amount;
-            Ok(self.balance)
-        }
-
-        fn get_created_at(&self) -> chrono::DateTime<chrono::Utc>{
-            self.created_at
-        }
-
-        fn get_account_type(&self) -> AccountType{
-            AccountType::Checking
-        }
-    }
-
-    impl Account{
-                /// Creates a new account with the given id, balance, and optional nickname
-        /// Will set the created_at field to the current time
-        /// 
-        /// # Arguments
-        /// 
-        /// * `id` - The id of the account
-        /// * `balance` - The balance of the account
-        /// * `nickname` - An optional nickname for the account
-        pub fn new(id: u32, balance: f64, nickname: Option<String>) -> Self{
-            Account{
-                id: id,
-                balance: balance,
-                nickname: nickname,
-                created_at: chrono::Utc::now(),
-            }
-        }
-
-        pub(crate) fn from_checking<T: Checking>(account: T) -> Self{
-            Account{
-                id: account.get_id(),
-                balance: account.get_balance(),
-                nickname: account.get_nickname(),
-                created_at: account.get_created_at(),
-            }
-        }
-    }
-
-    // from json string - use serde
-    impl std::str::FromStr for Account{
-        type Err = serde_json::Error;
-
-        /// Parses a JSON string into an Account
-        fn from_str(s: &str) -> Result<Account, Self::Err>{
-            serde_json::from_str(s)
-        }
-    }
-
-    /// An investment account is a checking account that can also be invested in stocks, bonds, etc.
-    /// Holds stocks, bonds, etc.
-    #[derive(Debug, Clone, Deserialize, Serialize)]
-    pub struct InvestmentAccount{
-        id: u32,
-        balance: f64,
-        nickname: Option<String>,
-        created_at: chrono::DateTime<chrono::Utc>,
-        investments: HashMap<String, Vec<StockHolding>>
-    }
-
-    impl FromStr for InvestmentAccount{
-        type Err = serde_json::Error;
-
-        /// Parses a JSON string into an InvestmentAccount
-        fn from_str(s: &str) -> Result<InvestmentAccount, Self::Err>{
-            serde_json::from_str(s)
-        }
-    }
-
-    /// An investment account can also hold liquid funds, and is thus a checking account
-    impl Checking for InvestmentAccount{
-
-        fn get_id(&self) -> u32{
-            self.id
-        }
-
-        fn get_balance(&self) -> f64{
-            self.balance
-        }
-
-        fn get_nickname(&self) -> Option<String>{
-            self.nickname.clone()
-        }
-
-        fn deposit(&mut self, amount: f64) -> f64{
-            self.balance += amount;
-            self.balance
-        }
-
-        fn withdraw(&mut self, amount: f64) -> Result<f64, error::BankError>{
-            if self.balance < amount{
-                return Err(error::BankError::InsufficientFunds);
-            }
-            self.balance -= amount;
-            Ok(self.balance)
-        }
-
-        fn get_created_at(&self) -> chrono::DateTime<chrono::Utc>{
-            self.created_at
-        }
-
-        fn get_account_type(&self) -> AccountType{
-            AccountType::Investment
-        }
-    }
-
-    impl InvestmentAccount{
-        /// Creates a new investment account with the given id, balance, and optional nickname
-        /// Will set the created_at field to the current time
-        /// 
-        /// # Arguments
-        /// 
-        /// * `id` - The id of the account
-        /// * `balance` - The balance of the account
-        /// * `nickname` - An optional nickname for the account
-        pub fn new(id: u32, balance: f64, nickname: Option<String>) -> Self{
-            InvestmentAccount{
-                id: id,
-                balance: balance,
-                nickname: nickname,
-                created_at: chrono::Utc::now(),
-                investments: HashMap::<String, Vec<StockHolding>>::new()
-            }
-        }
-
-        pub fn get_investments(&self) -> &HashMap<String, Vec<StockHolding>>{
-            &self.investments
-        }
-
-        pub fn purchase_investment(&mut self, symbol: String, price: f64, quantity: f64) -> Result<(), error::BankError>{
-            let total_cost = price * quantity;
-            let _ = self.withdraw(total_cost)?; // Ensure we have enough liquid funds
-            // Here, we can afford the investment
-            let holding = StockHolding::new(price, quantity, symbol.clone(), chrono::Utc::now());
-            if !self.investments.contains_key(&symbol){
-                self.investments.insert(symbol.clone(), Vec::<StockHolding>::new());
-            }
-            self.investments.get_mut(&symbol).unwrap().push(holding);
-            Ok(())
-        }
-
-        /// Sells an investment
-        /// Given a symbol, price, and quantity, will sell the investment if possible
-        /// 
-        /// # Arguments
-        /// 
-        /// * `symbol` - The symbol of the investment
-        /// * `price` - The price of the investment at the time of sale
-        /// * `quantity` - The quantity of the investment to sell
-        /// 
-        /// # Returns
-        /// 
-        /// * `Ok(())` - If the investment was sold successfully
-        /// * `Err(BankError::InsufficientQuantity)` - If the quantity of the investment is insufficient
-        pub fn sell_investment(&mut self, symbol: String, price: f64, quantity: f64) -> Result<(), error::BankError>{
-            if !self.investments.contains_key(&symbol){
-                return Err(error::BankError::InsufficientQuantity);
-            }
-            let total_units = self.investments.get(&symbol).unwrap().iter().map(|h| h.get_quantity()).sum::<f64>();
-            if total_units < quantity{
-                return Err(error::BankError::InsufficientQuantity);
-            }
-            let holdings = self.investments.get_mut(&symbol).unwrap();
-            let mut remaining_quantity = quantity;
-            let total_sale = price * quantity;
-            while remaining_quantity > 0.0{
-                let holding = holdings.pop().unwrap();
-                let sale_quantity = if remaining_quantity > holding.get_quantity() {holding.get_quantity()}else{remaining_quantity};
-                if sale_quantity < holding.get_quantity(){
-                    let new_holding = StockHolding::new(
-                        holding.get_price(), 
-                        holding.get_quantity() - sale_quantity,
-                        holding.get_symbol(), 
-                        holding.get_purchase_date()
-                    );
-                    holdings.push(new_holding);
-                }
-                remaining_quantity -= sale_quantity;
-            }
-            // if we sold the last of the symbol, remove the key
-            if holdings.len() == 0{
-                self.investments.remove(&symbol);
-            }
-            self.deposit(total_sale);
-            Ok(())
-        }
-
-        pub fn from_checking<T: Checking>(account: T) -> Self{
-            InvestmentAccount{
-                id: account.get_id(),
-                balance: account.get_balance(),
-                nickname: account.get_nickname(),
-                created_at: account.get_created_at(),
-                investments: HashMap::<String, Vec<StockHolding>>::new()
-            }
-        }
-
-    }
-
 }
 
 
@@ -428,14 +168,14 @@ mod tests{
 
     #[test]
     fn test_deposit(){
-        let mut account = account::Account::new(1, 0.0, None);
+        let mut account = accounts::CheckingAccount::new(1, 0.0, None);
         assert_eq!(account.deposit(10.0), 10.0);
         assert_eq!(account.deposit(5.0), 15.0);
     }
 
     #[test]
     fn test_withdraw(){
-        let mut account = account::Account::new(1, 10.0, None);
+        let mut account = accounts::CheckingAccount::new(1, 10.0, None);
         assert_eq!(account.withdraw(5.0).unwrap(), 5.0);
         assert_eq!(account.withdraw(5.0).unwrap(), 0.0);
         assert!(account.withdraw(1.0).is_err());
@@ -456,7 +196,7 @@ mod tests{
 
     #[test]
     fn test_investment_account(){
-        let mut account = account::InvestmentAccount::new(1, 0.0, None);
+        let mut account = accounts::InvestmentAccount::new(1, 0.0, None);
         assert_eq!(account.deposit(10.0), 10.0);
         assert_eq!(account.deposit(5.0), 15.0);
         assert_eq!(account.withdraw(5.0).unwrap(), 10.0);
@@ -466,7 +206,7 @@ mod tests{
 
     #[test]
     fn test_investment_account_purchase(){
-        let mut account = account::InvestmentAccount::new(1, 100.0, None);
+        let mut account = accounts::InvestmentAccount::new(1, 100.0, None);
         account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
         assert_eq!(account.get_balance(), 0.0);
         assert_eq!(account.get_investments().len(), 1);
@@ -480,7 +220,7 @@ mod tests{
 
     #[test]
     fn test_investment_account_sell(){
-        let mut account = account::InvestmentAccount::new(1, 100.0, None);
+        let mut account = accounts::InvestmentAccount::new(1, 100.0, None);
         account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
         account.sell_investment("AAPL".to_string(), 101.0, 1.0).unwrap();
         assert_eq!(account.get_balance(), 101.0);
@@ -489,14 +229,14 @@ mod tests{
 
     #[test]
     fn test_oversell(){
-        let mut account = account::InvestmentAccount::new(1, 100.0, None);
+        let mut account = accounts::InvestmentAccount::new(1, 100.0, None);
         account.purchase_investment("AAPL".to_string(), 100.0, 1.0).unwrap();
         assert!(account.sell_investment("AAPL".to_string(), 101.0, 2.0).is_err());
     }
 
     #[test]
     fn test_insufficient_funds(){
-        let mut account = account::InvestmentAccount::new(1, 100.0, None);
+        let mut account = accounts::InvestmentAccount::new(1, 100.0, None);
         assert!(account.purchase_investment("AAPL".to_string(), 100.0, 2.0).is_err());
     }
 

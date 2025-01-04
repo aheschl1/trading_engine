@@ -1,42 +1,26 @@
 use serde::{Deserialize, Serialize};
 
 
-/// A holding represents a stock that is owned by an account
-/// It has a price, quantity, symbol, and purchase date
-/// A holding represents a stock that is owned by an account, purchased at a certain price and quantity
-/// You can have multiple holdings of the same stock, but each holding is unique, as they have different purchase date times
-pub trait Holding{
-    fn get_price(&self) -> f64;
-    fn get_quantity(&self) -> f64;
-    fn get_symbol(&self) -> String;
-    fn get_purchase_date(&self) -> chrono::DateTime<chrono::Utc>;
-}
-
-/// A stock holding represents a stock that is owned by an account
-/// It has a price, quantity, symbol, and purchase date
-/// A stock holding represents a stock that is owned by an account, purchased at a certain price and quantity
+/// An asset is a holding that represents a stock or a cryptocurrency.
+/// It has a total cost, a quantity, and a symbol.
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct StockHolding{
-    price: f64,
-    quantity: f64,
-    symbol: String,
-    purchase_date: chrono::DateTime<chrono::Utc>,
+pub struct Holding{
+    asset: Asset,
+    pub total_cost: f64,
+    pub quantity: f64,
 }
 
-impl StockHolding{
-    pub fn new(price: f64, quantity: f64, symbol: String, purchase_date: chrono::DateTime<chrono::Utc>) -> Self{
-        StockHolding{
-            price: price,
+impl Holding{
+    pub fn new(total_cost: f64, quantity: f64, symbol: String) -> Self{
+        Holding{
+            total_cost: total_cost,
             quantity: quantity,
-            symbol: symbol,
-            purchase_date: purchase_date,
+            asset: Asset::new(symbol),
         }
     }
-}
 
-impl Holding for StockHolding{
     fn get_price(&self) -> f64{
-        self.price
+        self.total_cost
     }
 
     fn get_quantity(&self) -> f64{
@@ -44,10 +28,24 @@ impl Holding for StockHolding{
     }
 
     fn get_symbol(&self) -> String{
-        self.symbol.clone()
+        self.asset.get_symbol()
+    }
+}
+
+/// An asset is a stock or a cryptocurrency.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Asset{
+    symbol: String,
+}
+
+impl Asset{
+    pub fn new(symbol: String) -> Self{
+        Asset{
+            symbol: symbol
+        }
     }
 
-    fn get_purchase_date(&self) -> chrono::DateTime<chrono::Utc>{
-        self.purchase_date
+    pub fn get_symbol(&self) -> String{
+        self.symbol.clone()
     }
 }
