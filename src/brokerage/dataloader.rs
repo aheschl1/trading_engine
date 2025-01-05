@@ -1,16 +1,13 @@
 use std::path::{Path, PathBuf};
 
-use alphavantage::{time_series::{IntradayInterval, TimeSeries}, Client};
+use alphavantage::{cache_enabled::{client::Client, time_series::TimeSeries}, time_series::IntradayInterval};
 use chrono::Duration;
-use eframe::egui::util::cache;
 use tokio;
 use crate::utils::{APP_NAME, CACHE_INVALIDATE_RATE, expand_tilde};
 
 /// The dataloader is responsible for interacting with a stock client
 /// The loaders goal is to minimize the number of API calls.
 /// To do this, we check when the last call was. Maybe we can just return this data which is chached instead
-/// 
-
 pub struct Dataloader<'a>{
     client: &'a Client,
     cache_path: PathBuf,
@@ -33,6 +30,23 @@ impl<'a> Dataloader<'a>{
         })
     }
 
+    /// Get the time series intraday data for a symbol
+    /// If the data is in the cache and is valid, return the data from the cache
+    /// Otherwise, get the data from the client and write it to the cache
+    /// The data is written to the cache in a separate task
+    /// 
+    /// # Arguments
+    /// 
+    /// * `symbol` - The symbol to get the data for
+    /// * `interval` - The interval to get the data for
+    /// 
+    /// # Returns
+    /// 
+    /// The time series data
+    /// 
+    /// # Errors
+    /// 
+    /// If there is an error getting the data from the client or writing the data to the cache
     pub async fn get_time_series_intraday(&self, symbol: &str, interval: IntradayInterval) -> Result<TimeSeries, tokio::io::Error>{
         let cache_path = self.cache_path.join("time_series_intraday").join(symbol).join(interval.to_string()).join("data.json");
         self.prepare_cache_directory(&cache_path).await?;
