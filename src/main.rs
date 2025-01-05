@@ -2,14 +2,13 @@ use alphavantage::Client;
 use alphavantage;
 use eframe::egui::CentralPanel;
 use eframe::{App, CreationContext};
+use utils::APP_NAME;
 use std::env;
 use tokio;
 
 mod utils;
 mod bank;
 mod brokerage;
-
-const APP_NAME: &str = "trading_simulator";
 
 struct TradingSimulator{
     alphavantage_client: Client,
