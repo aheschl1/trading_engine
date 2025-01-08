@@ -1,5 +1,5 @@
 [package]
-name = "trading_simulator"
+name = "trading_engine"
 version = "0.1.0"
 edition = "2021"
 
@@ -10,3 +10,7 @@ serde = "1.0.217"
 serde_json = "1.0.134"
 thiserror = "2.0.9"
 chrono = "0.4.39"
+
+[lib]
+name = "trading_engine"
+path = "src/lib.rs"
