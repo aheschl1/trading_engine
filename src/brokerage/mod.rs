@@ -1,6 +1,4 @@
-mod dataloader;
-
-use alphavantage::{time_series::IntradayInterval, Client};
+use alphavantage::{time_series::IntradayInterval, cache_enabled::client::Client};
 use crate::bank::Bank;
 
 pub struct Broker<'a> {
