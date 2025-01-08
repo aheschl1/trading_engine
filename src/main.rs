@@ -1,7 +1,7 @@
-use alphavantage::Client;
+use alphavantage::cache_enabled::client::Client;
 use alphavantage;
-use eframe::egui::CentralPanel;
-use eframe::{App, CreationContext};
+use bank::accounts::Account;
+use bank::Bank;
 use utils::APP_NAME;
 use std::env;
 use tokio;
@@ -9,38 +9,24 @@ use tokio;
 mod utils;
 mod bank;
 mod brokerage;
+mod  state;
 
 struct TradingSimulator{
-    alphavantage_client: Client,
-    bank: Option<bank::Bank>,
+    brokerage: brokerage::Broker,
 }
 
 impl TradingSimulator{
-    fn new(alphavantage_client: Client) -> Self{
+    fn new(alphavantage_client: Client, bank: Bank) -> Self{
+        let broker = brokerage::Broker::new(alphavantage_client, bank);
         TradingSimulator{
-            alphavantage_client: alphavantage_client,
-            bank: None
+            brokerage: broker,
         }
     }
 }
 
-impl App for TradingSimulator{
-    fn update(&mut self, ctx: &eframe::egui::Context, frame: &mut eframe::Frame) {
-        CentralPanel::default().show(ctx, |ui| {
-            ui.heading("Trading Simulator");
-            ui.label("Welcome to the trading simulator!");
-        });
-    }
-
-    fn save(&mut self, _storage: &mut dyn eframe::Storage) {
-        // Save the bank state
-        if let Some(bank) = &self.bank{
-            _storage.set_string("bank", serde_json::to_string(bank).unwrap());
-        }
-        _storage.set_string("alphavantage_token", "hello".to_string());
-    }
-
-    
+async fn save_state(bank: &Bank) -> Result<(), tokio::io::Error>{
+    state::save_bank(&bank).await?;    
+    Ok(())
 }
 
 #[tokio::main]
@@ -50,16 +36,13 @@ async fn main() -> Result<(), tokio::io::Error> {
         .expect("You must specify a token for the AlphaVantage API with the ALPHAVANTAGE_TOKEN environment variable.");
 
     let alphavantage_client = Client::new(&alphavantage_token);
-    let app = TradingSimulator::new(alphavantage_client);
+    let mut bank  = match state::load_bank().await{
+        Ok(bank) => bank,
+        Err(_) => Bank::empty(),
+    };
+    // dummy account
+    bank.open_account(Some("Name".to_string()), bank::accounts::AccountType::Checking).unwrap();
+    bank.open_account(Some("Name".to_string()), bank::accounts::AccountType::Investment).unwrap();
 
-    let options = eframe::NativeOptions::default();
-    // ~/.config/trading_simulator should be the default path for the persistence file
-    // options.persistence_path = Some(utils::expand_tilde(format!("~/.config/{APP_NAME}").as_str()));
-
-    eframe::run_native(
-        APP_NAME, 
-        options,
-        Box::new(|_| Ok(Box::new(app))),
-    ).unwrap();
     Ok(())
 }

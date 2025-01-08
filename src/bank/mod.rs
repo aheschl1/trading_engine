@@ -96,6 +96,14 @@ impl Bank{
         Err(error::BankError::AccountNotFound)
     }
 
+    pub fn get_investment_accounts(&self) -> &HashMap<u32, InvestmentAccount>{
+        &self.investment_accounts
+    }
+
+    pub fn get_checking_accounts(&self) -> &HashMap<u32, CheckingAccount>{
+        &self.checking_accounts
+    }
+
 }
 
 impl From<HashMap<u32, CheckingAccount>> for Bank{
