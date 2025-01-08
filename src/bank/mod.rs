@@ -3,7 +3,7 @@ use accounts::{CheckingAccount, AccountType, Account, InvestmentAccount};
 use serde::{Deserialize, Serialize};
 mod stock;
 mod transactions;
-mod accounts;
+pub mod accounts;
 
 /// A bank that holds accounts
 /// It does nothing as of now, but hold accounts
@@ -67,6 +67,35 @@ impl Bank{
         let json = serde_json::to_string(self)?;
         tokio::fs::write(path, json).await
     }
+
+    pub fn get_investment_account(&self, id: u32) -> Result<&InvestmentAccount, error::BankError>{
+        if let Some(account) = self.investment_accounts.get(&id){
+            return Ok(account);
+        }
+        Err(error::BankError::AccountNotFound)
+    }
+
+    pub fn get_investment_account_mut(&mut self, id: u32) -> Result<&mut InvestmentAccount, error::BankError>{
+        if let Some(account) = self.investment_accounts.get_mut(&id){
+            return Ok(account);
+        }
+        Err(error::BankError::AccountNotFound)
+    }
+
+    pub fn get_checking_account(&self, id: u32) -> Result<&CheckingAccount, error::BankError>{
+        if let Some(account) = self.checking_accounts.get(&id){
+            return Ok(account);
+        }
+        Err(error::BankError::AccountNotFound)
+    }
+
+    pub fn get_checking_account_mut(&mut self, id: u32) -> Result<&mut CheckingAccount, error::BankError>{
+        if let Some(account) = self.checking_accounts.get_mut(&id){
+            return Ok(account);
+        }
+        Err(error::BankError::AccountNotFound)
+    }
+
 }
 
 impl From<HashMap<u32, CheckingAccount>> for Bank{
@@ -95,6 +124,7 @@ impl std::string::ToString for Bank{
 
 pub mod error{
     use thiserror::Error;
+    use tokio::time::error::Error;
 
     #[derive(Error, Debug)]
     pub enum BankError{
@@ -108,6 +138,10 @@ pub mod error{
         CloseAccountWithBalance,
         #[error("Insufficient quantity of investment")]
         InsufficientQuantity,
+        #[error("Tokio error: {0}")]
+        OtherTokio(tokio::io::Error),
+        #[error("AlphaVantage error: {0}")]
+        OtherAlphaVantage(alphavantage::error::Error),
     }
 }
 

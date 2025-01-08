@@ -1,5 +1,5 @@
 use alphavantage::{time_series::IntradayInterval, cache_enabled::client::Client};
-use crate::bank::Bank;
+use crate::bank::{self, Bank, accounts::Account};
 
 pub struct Broker<'a> {
     client: &'a Client,
@@ -26,7 +26,27 @@ impl<'a> Broker<'a> {
         &mut self.bank
     }
 
-    pub async fn buy(&mut self, symbol: &str, quantity: f64) {
-        let price = self.client.get_time_series_intraday(symbol, IntradayInterval::OneMinute).await;
+    /// Buys a stock with the given symbol and quantity for the given account
+    /// The price is the closing price of the most recent minute
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if the symbol is invalid or the account does not have enough funds
+    /// 
+    /// # Returns
+    /// 
+    /// Returns the new balance of the account
+    pub async fn buy(&mut self, symbol: &str, quantity: f64, account_id: u32) -> Result<f64, bank::error::BankError>{
+        let price = self.client.get_time_series_intraday(symbol, IntradayInterval::OneMinute).await
+            .map_err(|e| bank::error::BankError::OtherTokio(e))?
+            .map_err(|e| bank::error::BankError::OtherAlphaVantage(e))?
+            .entries
+            .last().unwrap()
+            .close;
+        
+        let account = self.bank.get_investment_account_mut(account_id)?;
+        account.purchase_investment(symbol.to_string(), quantity, price)?;
+
+        Ok(account.get_balance())
     }
 }
