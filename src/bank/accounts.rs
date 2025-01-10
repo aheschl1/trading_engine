@@ -7,7 +7,7 @@ use super::{error, stock::{self, Holding}, transactions::{self, Transaction}};
 
 /// The type of account
 #[derive(Debug, Clone, Deserialize, Serialize)]
-pub(crate) enum AccountType{
+pub enum AccountType{
     Checking,
     Investment,
 }
@@ -130,6 +130,13 @@ impl std::str::FromStr for CheckingAccount{
     }
 }
 
+// to json string - use serde
+impl ToString for CheckingAccount{
+    fn to_string(&self) -> String{
+        serde_json::to_string(self).unwrap()
+    }
+}
+
 /// An investment account is a checking account that can also be invested in stocks, bonds, etc.
 /// Holds stocks, bonds, etc.
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -148,6 +155,12 @@ impl FromStr for InvestmentAccount{
     /// Parses a JSON string into an InvestmentAccount
     fn from_str(s: &str) -> Result<InvestmentAccount, Self::Err>{
         serde_json::from_str(s)
+    }
+}
+
+impl ToString for InvestmentAccount{
+    fn to_string(&self) -> String{
+        serde_json::to_string(self).unwrap()
     }
 }
 
