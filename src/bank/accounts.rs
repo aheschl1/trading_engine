@@ -343,6 +343,7 @@ mod test{
     fn test_deposit(){
         let mut account = CheckingAccount::new(1, 0.0, None);
         assert_eq!(account.deposit(100.0), 100.0);
+        assert_eq!(account.deposit(100.0), 200.0);
     }
 
     #[test]
