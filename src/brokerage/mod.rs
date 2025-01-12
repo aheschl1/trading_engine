@@ -44,6 +44,26 @@ impl Broker {
             .map_err(|e| bank::error::BankError::OtherAlphaVantage(e))
     }
 
+    pub async fn get_time_series_daily_full(&self, symbol: &str) ->Result<TimeSeries, bank::error::BankError>
+    {
+        self.client.get_time_series_daily_full(symbol).await
+            .map_err(|e| bank::error::BankError::OtherTokio(e))?
+            .map_err(|e| bank::error::BankError::OtherAlphaVantage(e))
+    }
+
+    pub async fn get_time_series_weekly_full(&self, symbol: &str) ->Result<TimeSeries, bank::error::BankError>
+    {
+        self.client.get_time_series_weekly_full(symbol).await
+            .map_err(|e| bank::error::BankError::OtherTokio(e))?
+            .map_err(|e| bank::error::BankError::OtherAlphaVantage(e))
+    }
+
+    pub async fn get_time_series_monthly_full(&self, symbol: &str) ->Result<TimeSeries, bank::error::BankError>
+    {
+        self.client.get_time_series_monthly_full(symbol).await
+            .map_err(|e| bank::error::BankError::OtherTokio(e))?
+            .map_err(|e| bank::error::BankError::OtherAlphaVantage(e))
+    }
 
     /// Gets the price of a stock with the given symbol
     /// The pricce is the closing price of the most recent minute
