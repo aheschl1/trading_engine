@@ -1,16 +1,22 @@
+use std::sync::Arc;
+
 use alphavantage::{cache_enabled::{client::Client, time_series::TimeSeries}, time_series::IntradayInterval};
+use tokio::sync::Mutex;
 use crate::bank::{self, Bank, accounts::Account};
 
 pub struct Broker {
     client: Client,
-    bank: Bank
+    bank: Arc<Mutex<Bank>>
 }
 
 impl Broker {
-    pub fn new(client: Client, bank: Bank) -> Self {
+    pub fn new<T>(client: Client, bank: T) -> Self
+    where
+        T: Into<Arc<Mutex<Bank>>>,
+    {
         Broker {
             client,
-            bank
+            bank: bank.into(),
         }
     }
 
@@ -18,12 +24,8 @@ impl Broker {
         &self.client
     }
 
-    pub fn get_bank(&self) -> &Bank {
-        &self.bank
-    }
-
-    pub fn get_bank_mut(&mut self) -> &mut Bank {
-        &mut self.bank
+    pub fn get_bank(&self) -> Arc<Mutex<Bank>> {
+        self.bank.clone()
     }
 
     /// Gets the time series intraday data for the given symbol and interval
@@ -75,7 +77,11 @@ impl Broker {
     pub async fn buy(&mut self, symbol: &str, quantity: f64, account_id: u32) -> Result<f64, bank::error::BankError>{
         let price = self.get_price(symbol).await?;
         
-        let account = self.bank.get_investment_account_mut(account_id)?;
+        let mut bank = self.bank
+            .lock()
+            .await;
+
+        let account = bank.get_investment_account_mut(account_id)?;
         account.purchase_investment(symbol.to_string(), quantity, price)?;
 
         Ok(account.get_balance())

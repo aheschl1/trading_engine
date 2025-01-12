@@ -1,4 +1,4 @@
-use std::{collections::HashMap, rc::Rc, cell::RefCell};
+use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::{Arc, Mutex}};
 use accounts::{CheckingAccount, AccountType, Account, InvestmentAccount};
 use serde::{Deserialize, Serialize};
 mod stock;
@@ -112,6 +112,13 @@ impl From<HashMap<u32, CheckingAccount>> for Bank{
     }
 }
 
+// into Arc<Mutex<Bank>>
+impl Into<Arc<Mutex<Bank>>> for Bank {
+    fn into(self) -> Arc<Mutex<Bank>> {
+        Arc::new(Mutex::new(self))
+    }
+}
+
 // from str
 impl std::str::FromStr for Bank{
     type Err = serde_json::Error;
@@ -150,6 +157,8 @@ pub mod error{
         OtherTokio(tokio::io::Error),
         #[error("AlphaVantage error: {0}")]
         OtherAlphaVantage(alphavantage::error::Error),
+        #[error("Other error: {0}")]
+        Other(String),
     }
 }
 
