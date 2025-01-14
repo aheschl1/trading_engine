@@ -1,8 +1,9 @@
 use std::sync::Arc;
 
-use alphavantage::{cache_enabled::{client::Client, time_series::TimeSeries}, time_series::IntradayInterval};
+use alphavantage::{cache_enabled::{client::Client, tickers::Entry, time_series::{self, TimeSeries}}, time_series::IntradayInterval};
+use chrono::{format::Fixed, DateTime, FixedOffset};
 use tokio::sync::Mutex;
-use crate::bank::{self, Bank, accounts::Account};
+use crate::bank::{self, accounts::Account, error::BankError, Bank};
 
 pub struct Broker {
     client: Client,
@@ -66,7 +67,7 @@ impl Broker {
     }
 
     /// Gets the price of a stock with the given symbol
-    /// The pricce is the closing price of the most recent minute
+    /// The price is the closing price of the most recent minute
     /// 
     /// # Errors
     /// 
@@ -75,17 +76,34 @@ impl Broker {
     /// # Returns
     /// 
     /// Returns the price of the stock
-    pub async fn get_price(&self, symbol: &str) -> Result<f64, bank::error::BankError> {
-        let price = self.get_time_series_intraday(symbol, IntradayInterval::OneMinute).await?
+    pub async fn get_price(&self, symbol: &str, date_limit: Option<DateTime<FixedOffset>>) -> Result<f64, bank::error::BankError> {
+        let price = self.get_time_series_intraday(symbol, IntradayInterval::FiveMinutes).await?
             .entries
-            .last().unwrap()
-            .close;
+            .iter()
+            .filter(|entry|{
+                if let Some(date_limit) = date_limit {
+                    entry.date <= date_limit
+                } else {
+                    true
+                }
+            })
+            .collect::<Vec<&time_series::Entry>>()
+            .last()
+            .ok_or_else(||BankError::Other(String::from("Cannot find price")))
+            .map(|entry| entry.adjusted_close.unwrap_or(entry.close))?;
 
         Ok(price)
     }
 
     /// Buys a stock with the given symbol and quantity for the given account
     /// The price is the closing price of the most recent minute
+    /// 
+    /// # Arguments
+    /// 
+    /// * `symbol` - The symbol of the stock to buy
+    /// * `quantity` - The quantity of the stock to buy
+    /// * `account_id` - The id of the account to buy the stock from
+    /// * `date_limit` - The date limit to get the price of the stock
     /// 
     /// # Errors
     /// 
@@ -94,15 +112,15 @@ impl Broker {
     /// # Returns
     /// 
     /// Returns the new balance of the account
-    pub async fn buy(&mut self, symbol: &str, quantity: f64, account_id: u32) -> Result<f64, bank::error::BankError>{
-        let price = self.get_price(symbol).await?;
+    pub async fn buy(&mut self, symbol: &str, quantity: f64, account_id: u32, date_limit: Option<DateTime<FixedOffset>>) -> Result<f64, bank::error::BankError>{
+        let price = self.get_price(symbol, date_limit).await?;
         
         let mut bank = self.bank
             .lock()
             .await;
 
         let account = bank.get_investment_account_mut(account_id)?;
-        account.purchase_investment(symbol.to_string(), quantity, price)?;
+        account.purchase_investment(symbol.to_string(), price, quantity)?;
 
         Ok(account.get_balance())
     }
