@@ -53,14 +53,14 @@ impl Broker {
 
     pub async fn get_time_series_weekly_full(&self, symbol: &str) ->Result<TimeSeries, bank::error::BankError>
     {
-        self.client.get_time_series_weekly_full(symbol).await
+        self.client.get_time_series_weekly_adjusted_full(symbol).await
             .map_err(|e| bank::error::BankError::OtherTokio(e))?
             .map_err(|e| bank::error::BankError::OtherAlphaVantage(e))
     }
 
     pub async fn get_time_series_monthly_full(&self, symbol: &str) ->Result<TimeSeries, bank::error::BankError>
     {
-        self.client.get_time_series_monthly_full(symbol).await
+        self.client.get_time_series_monthly_adjusted_full(symbol).await
             .map_err(|e| bank::error::BankError::OtherTokio(e))?
             .map_err(|e| bank::error::BankError::OtherAlphaVantage(e))
     }
