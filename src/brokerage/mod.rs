@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use alphavantage::{cache_enabled::{client::Client, tickers::Entry, time_series::{self, TimeSeries}}, time_series::IntradayInterval};
+use alphavantage::{cache_enabled::{client::Client, tickers::{SearchResults, Entry}, time_series::{self, TimeSeries}}, time_series::IntradayInterval};
 use chrono::{format::Fixed, DateTime, FixedOffset};
 use tokio::sync::Mutex;
 use crate::bank::{self, accounts::Account, error::BankError, Bank};
@@ -123,5 +123,11 @@ impl Broker {
         account.purchase_investment(symbol.to_string(), price, quantity)?;
 
         Ok(account.get_balance())
+    }
+
+    pub async fn get_tickers(&self, query: &str) -> Result<SearchResults, bank::error::BankError> {
+        self.client.get_tickers(query).await
+            .map_err(|e| bank::error::BankError::OtherTokio(e))?
+            .map_err(|e| bank::error::BankError::OtherAlphaVantage(e))
     }
 }
