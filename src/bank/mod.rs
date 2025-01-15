@@ -1,7 +1,7 @@
 use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::{Arc, Mutex}};
 use accounts::{CheckingAccount, AccountType, Account, InvestmentAccount};
 use serde::{Deserialize, Serialize};
-mod stock;
+pub mod stock;
 mod transactions;
 pub mod accounts;
 
