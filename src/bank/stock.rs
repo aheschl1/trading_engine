@@ -35,7 +35,7 @@ impl Holding{
 /// An asset is a stock or a cryptocurrency.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Asset{
-    symbol: String,
+    pub symbol: String,
 }
 
 impl Asset{
