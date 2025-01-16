@@ -125,6 +125,35 @@ impl Broker {
         Ok(account.get_balance())
     }
 
+    /// Sell a stock
+    /// 
+    /// # Arguments
+    /// 
+    /// * `symbol` - The symbol of the stock to sell
+    /// * `quantity` - The quantity of the stock to sell
+    /// * `account_id` - The id of the account to sell the stock from
+    /// * `date_limit` - The date limit to get the price of the stock
+    /// 
+    /// # Errors
+    /// 
+    /// Returns an error if the symbol is invalid or the account does not have enough shares
+    /// 
+    /// # Returns
+    /// 
+    /// Returns the new balance of the account
+    pub async fn sell(&mut self, symbol: &str, quantity: f64, account_id: u32, date_limit: Option<DateTime<FixedOffset>>) -> Result<f64, bank::error::BankError>{
+        let price = self.get_price(symbol, date_limit).await?;
+        
+        let mut bank = self.bank
+            .lock()
+            .await;
+
+        let account = bank.get_investment_account_mut(account_id)?;
+        account.sell_investment(symbol.to_string(), price, quantity)?;
+
+        Ok(account.get_balance())
+    }
+
 
     /// Query for a list of ticker symbols that match the given query
     pub async fn get_tickers(&self, query: &str) -> Result<SearchResults, bank::error::BankError> {
