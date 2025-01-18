@@ -3,7 +3,7 @@ use std::{collections::HashMap, str::FromStr};
 use serde::{Deserialize, Serialize};
 use chrono;
 
-use super::{error, stock::{self, Holding}, transactions::{self, Transaction}};
+use super::{error, stock::{self, Holding}, transactions::{self, Transaction, TransactionType}};
 
 /// The type of account
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -32,6 +32,7 @@ pub trait Account {
     fn withdraw(&mut self, amount: f64) -> Result<f64, error::BankError>;
     fn get_account_type(&self) -> AccountType;
     fn get_created_at(&self) -> chrono::DateTime<chrono::Utc>;
+    fn add_transaction(&mut self, transaction: Transaction);
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -87,6 +88,10 @@ impl Account for CheckingAccount{
 
     fn get_account_type(&self) -> AccountType{
         AccountType::Checking
+    }
+
+    fn add_transaction(&mut self, transaction: Transaction){
+        self.transactions.push(transaction);
     }
 }
 
@@ -145,7 +150,7 @@ pub struct InvestmentAccount{
     balance: f64,
     nickname: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
-    assets: HashMap<String, Holding>,
+    pub assets: HashMap<String, Holding>,
     transactions: Vec<Transaction>,
 }
 
@@ -210,6 +215,10 @@ impl Account for InvestmentAccount{
 
     fn get_account_type(&self) -> AccountType{
         AccountType::Investment
+    }
+
+    fn add_transaction(&mut self, transaction: Transaction){
+        self.transactions.push(transaction);
     }
 }
 
