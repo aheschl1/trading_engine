@@ -1,3 +1,4 @@
+use chrono::FixedOffset;
 use serde::{Deserialize, Serialize};
 
 
@@ -49,3 +50,20 @@ impl Asset{
         self.symbol.clone()
     }
 }
+
+pub struct Dividend{
+    pub amount: f64,
+    pub asset: Asset,
+    pub date: chrono::DateTime<FixedOffset>,
+}
+
+impl Dividend{
+    pub fn new(amount: f64, asset: Asset, date: chrono::DateTime<FixedOffset>) -> Self{
+        Dividend{
+            amount: amount,
+            asset: asset,
+            date: date,
+        }
+    }
+}
+
