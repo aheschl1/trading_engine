@@ -301,6 +301,11 @@ impl Broker {
         Ok(())
     }
 
+    /**
+     * Parse the dividend data to only include dividends that are valid based on when we last loaded them.
+     * 
+     * For example, if the engine is called 1 day ago, we filter out all dividends that were paid before 1 day ago.
+     */
     async fn parse_valid_dividend_data(&self, symbol: &str, last_loaded: &DateTime<FixedOffset>, date: &DateTime<FixedOffset>) -> Result<Vec<DividendEntry>, bank::error::BankError> {
         let valid_dividend_data: Vec<DividendEntry> = 
             self.load_dividend_data(&symbol).await?
