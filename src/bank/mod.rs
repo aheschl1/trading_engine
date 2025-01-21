@@ -2,7 +2,7 @@ use std::{cell::RefCell, collections::HashMap, rc::Rc, sync::{Arc, Mutex}};
 use accounts::{CheckingAccount, AccountType, Account, InvestmentAccount};
 use serde::{Deserialize, Serialize};
 pub mod stock;
-mod transactions;
+pub mod transactions;
 pub mod accounts;
 
 /// A bank that holds accounts
@@ -98,6 +98,10 @@ impl Bank{
 
     pub fn get_investment_accounts(&self) -> &HashMap<u32, InvestmentAccount>{
         &self.investment_accounts
+    }
+
+    pub fn get_investment_accounts_mut(&mut self) -> &mut HashMap<u32, InvestmentAccount>{
+        &mut self.investment_accounts
     }
 
     pub fn get_checking_accounts(&self) -> &HashMap<u32, CheckingAccount>{

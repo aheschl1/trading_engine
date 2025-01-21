@@ -23,6 +23,20 @@ pub enum TransactionType {
     Dividend(Asset, f64)
 }
 
+// equal transaction type
+impl PartialEq for TransactionType {
+    fn eq(&self, other: &Self) -> bool {
+        match (self, other) {
+            (TransactionType::Deposit, TransactionType::Deposit) => true,
+            (TransactionType::Withdraw, TransactionType::Withdraw) => true,
+            (TransactionType::Sale(a1, q1), TransactionType::Sale(a2, q2)) => a1 == a2 && q1 == q2,
+            (TransactionType::Purchase(a1, q1), TransactionType::Purchase(a2, q2)) => a1 == a2 && q1 == q2,
+            (TransactionType::Dividend(a1, q1), TransactionType::Dividend(a2, q2)) => a1 == a2 && q1 == q2,
+            _ => false,
+        }
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Transaction {
     /// The type of transaction.

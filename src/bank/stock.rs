@@ -6,7 +6,7 @@ use serde::{Deserialize, Serialize};
 /// It has a total cost, a quantity, and a symbol.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Holding{
-    asset: Asset,
+    pub asset: Asset,
     pub average_cost_per_unit: f64,
     pub quantity: f64,
 }
@@ -48,6 +48,12 @@ impl Asset{
 
     pub fn get_symbol(&self) -> String{
         self.symbol.clone()
+    }
+}
+
+impl PartialEq for Asset{
+    fn eq(&self, other: &Self) -> bool{
+        self.symbol == other.symbol
     }
 }
 

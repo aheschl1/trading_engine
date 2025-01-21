@@ -151,7 +151,7 @@ pub struct InvestmentAccount{
     nickname: Option<String>,
     created_at: chrono::DateTime<chrono::Utc>,
     pub assets: HashMap<String, Holding>,
-    transactions: Vec<Transaction>,
+    pub transactions: Vec<Transaction>,
 }
 
 impl FromStr for InvestmentAccount{
