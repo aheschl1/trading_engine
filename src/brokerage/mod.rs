@@ -115,12 +115,33 @@ impl Broker {
         Ok(tickers[0].clone())
     }
 
+    /// Something like tz:UTC+5:00 or tz:UTC-5:00
+    fn parse_utc_offset(&self, timezone: &str) -> Result<FixedOffset, BankError> {
+        let offset = timezone
+            .split("UTC")
+            .collect::<Vec<&str>>()[1]
+            .split(":")
+            .collect::<Vec<&str>>();
+        let hours = offset[0].parse::<i32>().map_err(|e| BankError::Other(e.to_string()))?;
+        let minutes = offset.iter().nth(1).unwrap_or(&"0").parse::<i32>().map_err(|e| BankError::Other(e.to_string()))?;
+        Ok(FixedOffset::east_opt(hours * 3600 + minutes * 60).unwrap())
+    }
+
     async fn is_market_open(&self, symbol: &str, date_limit: DateTime<FixedOffset>) -> Result<bool, BankError> {
         let ticker = self.get_ticker(symbol.to_string()).await.map_err(|e| BankError::OtherTokio(e))??;
         let market_open = ticker.market_open;
         let market_close = ticker.market_close;
+        // println!("Market open: {}, Market close: {}", market_open, market_close);
+        // println!("tz:{}", ticker.timezone);
+        // println!("Date limit: {}", date_limit.to_utc().time());
+        let offset = self.parse_utc_offset(&ticker.timezone)?;
+        // put the offset in the open and close times
+        // println!("Market open: {}, Market close: {}", market_open, market_close);
         // now, make sure it is currently trading, based on date_limit
-        if date_limit.time() < market_open || date_limit.time() > market_close {
+        println!("Oprn: {}, Close: {}", market_open - offset, market_close - offset);
+        println!("offset: {}", offset);
+        println!("Date limit: {}", date_limit.to_utc().time());
+        if date_limit.to_utc().time() < market_open - offset || date_limit.to_utc().time() > market_close - offset {
             return Ok(false)
         }
         Ok(true)
